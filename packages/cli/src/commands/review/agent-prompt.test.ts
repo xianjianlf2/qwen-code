@@ -2049,6 +2049,110 @@ describe('buildRoleBrief — every agent, not just the territory ones', () => {
   });
 });
 
+// The lens a live dogfood proved missing: a per-tool-turn append whose target
+// was pushed, one hop away, into conversation history nothing reclaims — and
+// all 11 dimension agents read the diff hunk-locally. The capture commands now
+// enumerate candidate accumulation sites deterministically; the weld below is
+// the judge half — mechanical, like the chunk ranges, because prose exhortation
+// alone has been measured not to move models.
+describe('buildRoleBrief — the accumulation-candidate weld (Agent 4)', () => {
+  const CANDIDATES = [
+    {
+      file: 'packages/core/src/chat/session.ts',
+      line: 42,
+      snippet: 'this.history.push(entry);',
+      receiver: 'this.history',
+      kind: 'push',
+    },
+    {
+      file: 'packages/cli/src/state.ts',
+      line: 7,
+      snippet: 'registry.set(id, entry);',
+      receiver: 'registry',
+      kind: 'map-set',
+    },
+  ];
+  const WITH = { ...PLAN, recurrenceCandidates: CANDIDATES };
+
+  it('welds the candidate list and the three-question contract into Agent 4', () => {
+    const p = buildRoleBrief(WITH, '4');
+    // The mechanical enumeration: every candidate, numbered, file:line + snippet.
+    expect(p).toContain('## Accumulation candidates — adjudicate EVERY one');
+    expect(p).toContain(
+      '1. `packages/core/src/chat/session.ts:42` — `this.history.push(entry);` ' +
+        '(push into `this.history`)',
+    );
+    expect(p).toContain(
+      '2. `packages/cli/src/state.ts:7` — `registry.set(id, entry);` ' +
+        '(map/set write into `registry`)',
+    );
+    // The three-question contract, defined once in the brief text.
+    expect(p).toContain('how often does this write fire');
+    expect(p).toContain('what bounds the CONTAINER it flows into');
+    expect(p).toContain('who reclaims old entries');
+    expect(p).toContain('REQUIRED');
+    // Clearing a candidate takes evidence, not a shrug.
+    expect(p).toContain('must name its bound or its reclaimer');
+  });
+
+  it('emits no candidate section when the plan carries none', () => {
+    const p = buildRoleBrief(PLAN, '4');
+    expect(p).not.toContain('## Accumulation candidates');
+    // The brief's own explanation of the three questions still stands.
+    expect(p).toContain('who reclaims old entries');
+  });
+
+  it('does not bleed the list into a sibling dimension', () => {
+    const p = buildRoleBrief(WITH, '1a');
+    expect(p).not.toContain('## Accumulation candidates');
+    expect(p).not.toContain('packages/core/src/chat/session.ts:42');
+  });
+
+  it('drops a malformed candidate instead of rendering undefined', () => {
+    // The plan is parsed off disk with an unchecked cast; a corrupt entry must
+    // not put `undefined:NaN` into the one list the agent must walk item by item.
+    const p = buildRoleBrief(
+      {
+        ...PLAN,
+        recurrenceCandidates: [
+          CANDIDATES[0],
+          { file: '', line: 'x' },
+          null,
+          { file: 'a.ts', line: 0, snippet: 's', receiver: 'r', kind: 'push' },
+        ],
+      },
+      '4',
+    );
+    expect(p).toContain('packages/core/src/chat/session.ts:42');
+    expect(p).not.toContain('undefined');
+    expect(p).not.toContain('a.ts:0');
+  });
+
+  it('flattens hostile bytes in a PR-controlled path, snippet and receiver', () => {
+    // All three fields derive from diff content. A newline or backtick smuggled
+    // into the brief could open its own Markdown line or close the code span the
+    // entry is rendered inside.
+    const p = buildRoleBrief(
+      {
+        ...PLAN,
+        recurrenceCandidates: [
+          {
+            file: 'src/evil\n.ts',
+            line: 3,
+            snippet: 'x.push(`${y}`);',
+            receiver: 'x',
+            kind: 'push',
+          },
+        ],
+      },
+      '4',
+    );
+    expect(p).not.toContain('evil\n.ts');
+    expect(p).toContain('src/evil .ts:3');
+    expect(p).not.toContain('push(`${y}`)');
+  });
+});
+
 // The size problem, stated as a test. A 4 652-character prompt is not a thing an
 // orchestrator will paste twelve times: measured on a real run, it delivered 2 893
 // characters of one — head kept, preamble of its own added, 1 900 characters cut

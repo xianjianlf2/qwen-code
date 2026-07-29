@@ -274,6 +274,8 @@ Expect the three ends to be far apart. The declaration, the pass-through, and th
 - Missing caching opportunities
 - Bundle-size impact
 
+**When your prompt carries an "Accumulation candidates" section, adjudicating every entry in it is REQUIRED, not advisory.** Each candidate is an added line that writes into a container that may outlive the write. A diff hunk shows the single write, never the accumulation — the leak lives one hop away, in the container the written value flows into. For EACH candidate your findings record must answer three questions: **(a)** how often does this write fire — per turn, per tool call, per event, or once? **(b)** what bounds the CONTAINER it flows into — not the single item; trace one hop: where does the written value go next? **(c)** who reclaims old entries, and does that reclaimer actually cover this kind of entry? A candidate whose answers are "recurs per turn / container unbounded / nothing reclaims it" is a finding — unbounded accumulation is a leak, and a leak is Critical. A candidate you clear must name its bound or its reclaimer; "looks fine" clears nothing.
+
 **Do not take the PR's own performance numbers on trust — separate the claims you can reproduce from the ones you cannot.**
 
 - **Reproducible by inspection or a cheap deterministic check** — bundle bytes from the esbuild metafile, whether an import is actually tree-shaken out of the shipped chunk, a loop's iteration count, whether a cache is really consulted on the hot path: reproduce it and confirm the magnitude, or report that it does **not** reproduce. A claimed win whose mechanism cannot produce it (the "optimized" path still does the work, the lazy import is still statically reachable) is a finding, even when the PR shows a number.
